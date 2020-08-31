@@ -1,7 +1,21 @@
 #! /usr/bin/python3
 
+import nltk
 import random
-from config import BOT_CONFIG
+# from config import BOT_CONFIG
+
+# pip3 install scikit-learn
+# Импорт методов для Векторизации данных из DataSet
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+# Импорт методов для Классификации
+from sklearn.linear_model import LogisticRegression
+
+# Импорт методов для тестового разбиения DataSet
+from sklearn.model_selection import train_test_split
+
+from DataSet.DataSet import BOT_CONFIG
 
 """
 Создаем бота для работы с NLP.
@@ -15,9 +29,15 @@ from config import BOT_CONFIG
 """
 
 
+def trace(object):
+    print('==============')
+    print(object)
+    print('==============')
+
+
 def get_default_response():
     """Метод Заглушка, возвращает дефолтное значение."""
-    candidates = ["Я не понял вас", "Уточните ваш вопрос"]
+    candidates = BOT_CONFIG['failure_responses']
     return random.choice(candidates)
 
 
@@ -28,8 +48,14 @@ def generative_answer():
 
 def get_intent(text):
     """Поиск Интентов, четко поставленых намерений пользователя."""
-    # return 'hello'
-    return None
+
+    for intent_name, intent_data in BOT_CONFIG['intents'].items():
+        for example in intent_data['examples']:
+            distance = nltk.edit_distance(text.lower(), example.lower())
+            # print(distance, distance / len(example)*100)
+            if distance / len(example) < 0.4:
+                return intent_name
+
 
 
 # TODO Тут написать код для генерации ответа на четкий интент
@@ -59,6 +85,103 @@ def get_answer(text):
     return get_default_response()
 
 
-while True:
-    question = input("============ Ввод: ")
-    print(get_answer(question))
+def prepareVectorize():
+    """Метод подготовки(Классификаци) нашего DataSet для векторизации"""
+    dataset = []
+    for intent, intent_data in BOT_CONFIG['intents'].items():
+        for example in intent_data['examples']:
+            dataset.append([example, intent])
+    return dataset
+
+
+def vectorizationDataSet(dataset):
+    """ВЕКТОРИЗАЦИЯ нашего DataSet
+    Тут используется метод работы 'Мешок слов' методом CountVectorizer()
+    Можно былобы использовать метод TfidfVectorizer() более сложный метод для
+    векторизации.
+    """
+    x_text = [x for x, y in dataset]
+    y = [y for x, y in dataset]
+
+    vectorizer = CountVectorizer()
+    # vectorizer = TfidfVectorizer()
+    X = vectorizer.fit_transform(x_text)
+
+    text = 'ну привтеики как дела?'
+    result_vector = vectorizer.transform([text])
+    # print(result_vector.toarray())
+
+
+
+
+    # Вывести весь список слов что были встрчены,
+    # print(vectorizer.get_feature_names())
+    # если фраза простая то значения может встречаться очень редко
+    # print(X.toarray()[0])
+    # print(X.toarray())
+
+    # for elem in x_text[:100]:
+    # for elem in y:
+    #     print(elem)
+    classification_method(X, y, result_vector)
+
+
+def classification_method(X, y, result_vector):
+    """КЛАССИФИКАЦИЯ
+    Алгоритмов классификации довольно много, и разделены они по тематике, типо
+    Линейной регрессии, SGD классификация .... используем Логичексуцю Регрессию.
+    """
+    # Скармливаем Векторизированные данные нашему алгоритму линейной регрессии
+    # Так сказать обучаем нашу машину,
+    clf = LogisticRegression()
+
+    # clf.fit(X, y)
+    tester_split_dataset(clf, X, y)
+
+    # # print(clf.predict(X[:100]))
+    #
+    # # Посмотреть какие классы есть у классификатора
+    # trace(clf.classes_)
+    #
+    # # Посмотретреть какие вероятности соотношения текста и Классов Интентов
+    # trace(clf.predict_proba(result_vector))
+    #
+    # trace(clf.predict(result_vector))
+
+
+
+
+def tester_split_dataset(clf, X, y):
+    """Тестирование
+    Делаем случайное деление нашего DataSet на 2 части для
+    обучения и для теста, далее если модель обучившись на одной части
+    сможет предсказывать другую, то можно говорить о хороших вероятностях
+    нашей обученной мождели."""
+
+    # Метод тестового разделения Dataset 2 части
+    X_train, X_test, y_train, y_test = train_test_split(
+                                                            X,
+                                                            y,
+                                                            test_size=0.33,
+                                                            # random_state=42
+                                                        )
+    clf.fit(X_train, y_train)
+
+    # Тест,оказать процент совпадения
+    test_result = clf.score(X_test, y_test)
+    print(test_result)
+
+
+
+def start_app():
+    while True:
+        """Старт процессу бесконечного опроса, в ожиданнии вопроса от пользователя."""
+        question = input("Ввод: ")
+        print(get_answer(question))
+
+# start_app()
+vectorizationDataSet(prepareVectorize())
+
+
+
+
